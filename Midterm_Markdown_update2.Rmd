@@ -30,6 +30,8 @@ library(ggstance) # to support jtools plots
 library(ggpubr)    # plotting R^2 value on ggplot point scatter
 library(broom.mixed) # needed for effects plots
 
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
 # functions and data directory"
 
 NC_Data = st_read("https://raw.githubusercontent.com/mafichman/MUSA_508_Lab/main/Midterm/data/2022/studentData.geojson")
@@ -62,6 +64,16 @@ NCData.sf <-
   st_transform('ESRI:102286') %>%
   distinct()
 
+ImprovProj <-
+  st_read("Capital_Improvement_Projects_Points.geojson") %>%
+  st_transform('ESRI:102286')
+
+ImproveProj.sf <-
+  ImprovProj %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
 Groceries <- st_read("Grocery_Stores_(points).geojson")
 
 Groceries.sf <- 
@@ -72,46 +84,23 @@ Groceries.sf <-
 
 ```
 
-### Exploratory data analysis
-
-```{r EDA}
-
-# finding counts by group
-NC_Data %>% 
-group_by(bldggrade) %>%
-  summarize(count = n()) %>%
-  arrange(-count) %>% top_n(10) %>%
-  kable() %>%
-  kable_styling()
-```
-
 ### Mapping 
 
 See if you can alter the size of the image output. Search for adjusting figure height and width for a rmarkdown block
 
 ```{r price_map}
-# ggplot, reorder
 
-# Mapping data of NC
-ggplot() +
-  geom_sf(data = NCData.sf, aes(colour = q5(price)), 
-          show.legend = "point", size = .75) +
-  scale_colour_manual(values = palette5,
-                   labels=("Charlotte,Price"),
-                   name="Quintile\nBreaks") +
-  labs(title="Price, Charlotte") +
-  mapTheme()
+# 1 map of your dependent variable (sale price) 
 
-# Mapping data of Groceries 
+NCData.sf$PricePerArea <- NC_Data$price/NC_Data$heatedarea
 
 ggplot() +
-  #geom_sf(data = Groceries.sf, fill = "grey40") +
-  geom_sf(data = Groceries.sf, aes(colour = q5(price), 
+  geom_sf(data = NCData.sf, aes(colour = q5(PricePerArea)), 
           show.legend = "point", size = .75) +
   scale_colour_manual(values = palette5,
-                   labels=qBr(boston,"PricePerSq"),
+                   labels= qBr(NCData.sf, "price"),
                    name="Quintile\nBreaks") +
-  labs(title="Price Per Square Foot, Boston") +
+  labs(title="Price Per Square Foot, Charlotte") +
   mapTheme()
 ```
 
@@ -124,7 +113,6 @@ Groceries.sf <-
     st_as_sf(coords = c("Long", "Lat"), crs = "EPSG:4326") %>%
     st_transform('ESRI:102286') %>%
     distinct()
-
 
 ```
 
@@ -177,7 +165,44 @@ NCData.sf <-
       grocery_nn5 = nn_function(st_coordinates(NCData.sf), 
                               st_coordinates(Groceries.sf), k = 5)) 
 
-## Nearest Neighbor Neighbor - cap improvement projects
+## Map of 1st Independent Variable - Groceries 
+
+GroceryBuffers <- 
+  rbind(
+    st_buffer(Groceries.sf, 2640) %>%
+      mutate(Legend = "Buffer") %>%
+      dplyr::select(Legend),
+    st_union(st_buffer(Groceries.sf, 2640)) %>%
+      st_sf() %>%
+      mutate(Legend = "Unioned Buffer"))
+
+ggplot() + 
+  geom_sf(data=st_union(GroceryBuffers)) +
+  geom_sf(data=GroceryBuffers, 
+          aes(colour = Legend 
+          show.legend = "point", size= 2) +
+  scale_colour_manual(values = c("orange","blue")) +
+  labs(title="Valley Metro Stops", 
+       subtitle="Phoenix, AZ", 
+       caption="Figure") +
+  mapTheme()
+
+ggplot() +
+  facet_wrap(~Legend) +
+  geom_sf(data=GroceryBuffers) +
+  geom_sf(data=PHXstops, show.legend = "point") +
+  mapTheme()
+
+ggplot() +
+  geom_sf(data = NCData.sf, aes(colour = q5(as.numeric(grocery_nn1))), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels= qBr(NCData.sf, "grocery store exposure"),
+                   name="Quintile\nBreaks") +
+  labs(title="Price Per Square Foot, Charlotte") +
+  mapTheme()
+
+## Nearest Neighbor Neighbor - cap Improvement projects
 
 NCData.sf <-
   NCData.sf %>% 
@@ -196,6 +221,19 @@ NCData.sf <-
       
       proj_nn5 = nn_function(st_coordinates(NCData.sf), 
                               st_coordinates(ImproveProj.sf), k = 5)) 
+
+## Map of 2nd Independent Variable - Cap Improvement Projects 
+
+ggplot() + 
+  geom_sf(data=st_union(Groceries.sf)) +
+  geom_sf(data=Groceries.sf, 
+          aes(colour = Line), 
+          show.legend = "point", size= 2) +
+  scale_colour_manual(values = c("orange","blue")) +
+  labs(title="Grocery Store Exposure", 
+       subtitle="Charlotte, NC", 
+       caption="Figure") +
+  mapTheme()
 ```
 
 ```{r assault density}
