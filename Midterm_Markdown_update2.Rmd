@@ -1,0 +1,675 @@
+---
+title: "MUSA 508, Midterm"
+author: "Brooke Acosta, Kate Tanabe"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+# You can set some global options for knitting chunks
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load some libraries
+
+library(tidyverse)
+library(dplyr)
+library(sf)
+library(spdep)
+library(caret)
+library(ckanr)
+library(FNN)
+library(grid)
+library(ggplot2)
+library(gridExtra)
+library(ggcorrplot) # plot correlation plot
+library(corrr)      # another way to plot correlation plot
+library(kableExtra)
+library(jtools)     # for regression model plots
+library(ggstance) # to support jtools plots
+library(ggpubr)    # plotting R^2 value on ggplot point scatter
+library(broom.mixed) # needed for effects plots
+
+# functions and data directory"
+
+NC_Data = st_read("https://raw.githubusercontent.com/mafichman/MUSA_508_Lab/main/Midterm/data/2022/studentData.geojson")
+head(NC_Data)
+
+palette5 <- c("#25CB10", "#5AB60C", "#8FA108",   "#C48C04", "#FA7800")
+
+```
+
+# MUSA 508, Lab 4 - Spatial Machine Learning Pt. 1
+
+The learning objectives of this lab are:
+
+*   Review Topics: loading data, {dplyr}, mapping and plotting with {ggplot2}
+*   New: Understanding how we created spatial indicators with K-Nearest Neighbor and the `nn_function()` function
+*   Simple correlation and the Pearson's r - Correlation Coefficient
+*   Linear Regression model goodness-of-fit and R2 - Coefficient of Determination
+
+The in-class exercise at the end encourages students to modify the existing code to create a different regression and interpret it. Finally, there is a prompt to create a new feature and add it to the regression.
+
+## Data Wrangling
+
+See if you can change the chunk options to get rid of the text outputs
+
+```{r read_data}
+
+ImprovProj <- 
+  st_read("Capital_Improvement_Projects_Points.geojson") %>%
+  st_transform('ESRI:102286')
+
+Groceries <- st_read("Grocery_Stores_(points).geojson")
+
+NCData.sf <- 
+  NC_Data %>% 
+ st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+ImproveProj.sf <- 
+  ImprovProj %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+Groceries.sf <- 
+  Groceries %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+```
+
+### Exploratory data analysis
+
+```{r EDA}
+
+# finding counts by group
+NC_Data %>% 
+group_by(bldggrade) %>%
+  summarize(count = n()) %>%
+  arrange(-count) %>% top_n(10) %>%
+  kable() %>%
+  kable_styling()
+```
+
+### Mapping 
+
+See if you can alter the size of the image output. Search for adjusting figure height and width for a rmarkdown block
+
+```{r price_map}
+# ggplot, reorder
+
+# Mapping data of NC
+ggplot() +
+  geom_sf(data = NCData.sf, aes(colour = q5(price)), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels=("Charlotte,Price"),
+                   name="Quintile\nBreaks") +
+  labs(title="Price, Charlotte") +
+  mapTheme()
+
+# Mapping data of Groceries 
+
+ggplot() +
+  #geom_sf(data = Groceries.sf, fill = "grey40") +
+  geom_sf(data = Groceries.sf, aes(colour = q5(price), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels=qBr(boston,"PricePerSq"),
+                   name="Quintile\nBreaks") +
+  labs(title="Price Per Square Foot, Boston") +
+  mapTheme()
+```
+
+
+### Cleaning Improvement Data
+
+```{r}
+Groceries.sf <-
+  Groceries %>%
+    st_as_sf(coords = c("Long", "Lat"), crs = "EPSG:4326") %>%
+    st_transform('ESRI:102286') %>%
+    distinct()
+
+
+```
+
+
+### Create Nearest Spatial Features
+This is where we do two important things:
+
+*   aggregate values within a buffer, and 
+*   create  `nearest neighbor` features. 
+
+These are primary tools we use to add the local spatial signal to each of the points/rows/observations we are modeling. 
+
+#### Buffer aggregate
+
+The first code in this block buffers each point in `boston.sf` by `660` ft and then uses `aggregate` to count the number of `bostonCrimes.sf` points within that buffer. There is a nested call to `mutate` to assign a value of `1` for each `bostonCrimes.sf` as under a column called `counter`. This allows each crime to have the same weight in when the `sun` function is called, but other weighting schemes could be used. Finally, the code `pull` pulls the aggregate values so they can be assigned as the `crimes.Buffer` column to `boston.sf`. This is a little different from how you had assigned new columns before (usually using `mutate`), but valid. Your new feature `crimes.Buffer` is a count of all the crimes within 660ft of each reported crime. Why would it be god to know this when building a model?  
+
+
+#### k nearest neighbor (knn)
+
+The second block of code is using knn for averaging or summing values of a set number of (referred to as `k`) the nearest observations to each observation; it's *nearest neighbors*. With this, the model can understand the magnitude of values that are *near* each point. This adds a spatial signal to the model. 
+
+<!-- The function `nn_function()` takes two pairs of **coordinates** form two `sf` **point** objects. You will see the use of `st_c()` which is just a shorthand way to get the coordinates with the `st_coordinates()` function. You can see where `st_c()` is created. Using `st_c()` within `mutate` converts the points to longitude/latitude coordinate pairs for the `nn_function()` to work with. If you put *polygon* features in there, it will error. Instead you can use `st_c(st_centroid(YourPolygonSfObject))` to get nearest neighbors to a polygon centroid. -->
+
+The number `k` in the `nn_function()` function is the number of neighbors to to values from that are then averaged. Different types of crime (or anything else you measure) will require different values of `k`. *You will have to think about this!*. What could be the importance of `k` when you are making knn features for a violent crime versus and nuisance crime?
+
+```{r Features}
+# Counts of grocery stores per buffer of house sale
+NCData.sf$groceries.Buffer =
+    st_buffer(NCData.sf$geometry, 1609) %>% 
+    aggregate(mutate(Groceries.sf, counter = 1),., sum) %>%
+    pull(counter)
+
+## Nearest Neighbor Neighbor - grocery stores
+
+NCData.sf <-
+  NCData.sf %>% 
+    mutate(
+      grocery_nn1 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 1),
+      
+      grocery_nn2 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 2), 
+      
+      grocery_nn3 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 3), 
+      
+      grocery_nn4 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 4), 
+      
+      grocery_nn5 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 5)) 
+
+## Nearest Neighbor Neighbor - cap improvement projects
+
+NCData.sf <-
+  NCData.sf %>% 
+    mutate(
+      proj_nn1 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 1),
+      
+      proj_nn2 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 2), 
+      
+      proj_nn3 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 3), 
+      
+      proj_nn4 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 4), 
+      
+      proj_nn5 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 5)) 
+```
+
+```{r assault density}
+## Plot grocery density
+ggplot() + geom_sf(data = Groceries, fill = "grey40") +
+  stat_density2d(data = data.frame(st_coordinates(Groceries.sf)), 
+                 aes(X, Y, fill = ..level.., alpha = ..level..),
+                 size = 0.01, bins = 40, geom = 'polygon') +
+  scale_fill_gradient(low = "#25CB10", high = "#FA7800", name = "Density") +
+  scale_alpha(range = c(0.00, 0.35), guide = "none") +
+  labs(title = "Density of Grocery Stores, NC") +
+  mapTheme()
+```
+
+## Analyzing associations
+
+Run these code blocks...
+Notice the use of `st_drop_geometry()`, this is the correct way to go from a `sf` spatial dataframe to a regular dataframe with no spatial component.
+
+Can somebody walk me through what they do?
+
+Can you give me a one-sentence description of what the takeaway is?
+
+
+```{r Correlation}
+
+## Home Features cor
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, landusecod) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of continuous variables")
+```
+
+Can we resize this somehow to make it look better?
+
+```{r crime_corr}
+## Crime cor
+NCData.sf %>%
+  st_drop_geometry() %>%
+  mutate(Age = 2015 - yearbuilt) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, nrow = 1, scales = "free") +
+     labs(title = "Price as a function of continuous variables") +
+     plotTheme()
+```
+
+## Correlation matrix
+
+A correlation matrix gives us the pairwise correlation of each set of features in our data. It is usually advisable to include the target/outcome variable in this so we can understand which features are related to it.
+
+Some things to notice in this code; we use `select_if()` to select only the features that are numeric. This is really handy when you don't want to type or hard-code the names of your features; `ggcorrplot()` is a function from the `ggcorrplot` package.
+
+
+
+# Univarite correlation -> multi-variate OLS regression
+
+### Pearson's r - Correlation Coefficient
+
+Pearson's r Learning links:
+*   [Pearson Correlation Coefficient (r) | Guide & Examples](https://www.scribbr.com/statistics/pearson-correlation-coefficient/)
+*   [Correlation Test Between Two Variables in R](http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r)
+
+Note: the use of the `ggscatter()` function from the `ggpubr` package to plot the *Pearson's rho* or *Pearson's r* statistic; the Correlation Coefficient. This number can also be squared and represented as `r2`. However, this differs from the `R^2` or `R2` or "R-squared" of a linear model fit, known as the Coefficient of Determination. This is explained a bit more below.
+
+```{r uni_variate_Regression}
+nc_sub_200k <- st_drop_geometry(NCData.sf) %>% 
+filter(price <= 2000000) 
+
+cor.test(nc_sub_200k$heatedarea,
+         nc_sub_200k$price, 
+         method = "pearson")
+
+ggscatter(nc_sub_200k,
+          x = "heatedarea",
+          y = "price",
+          add = "reg.line") +
+  stat_cor(label.y = 2500000) 
+
+```
+
+**Let's take a few minutes to interpret this**
+
+```{r correlation_matrix}
+numericVars <- 
+  select_if(nc_sub_200k, is.numeric) %>% na.omit()
+
+ggcorrplot(
+  round(cor(numericVars), 1), 
+  p.mat = cor_pmat(numericVars),
+  colors = c("#25CB10", "white", "#FA7800"),
+  type = "lower",
+  insig = "blank") +  
+    labs(title = "Correlation across numeric variables") 
+
+# yet another way to plot the correlation plot using the corrr library
+numericVars %>% 
+  correlate() %>% 
+  autoplot() +
+  geom_text(aes(label = round(r,digits=2)),size = 2)
+
+```
+The Pearson's rho - Correlation Coefficient and the R2 Coefficient of Determination are **very** frequently confused! It is a really common mistake, so take a moment to understand what they are and how they differ. [This blog](https://towardsdatascience.com/r%C2%B2-or-r%C2%B2-when-to-use-what-4968eee68ed3) is a good explanation. In summary:
+
+*   The `r` is a measure the degree of relationship between two variables say x and y. It can go between -1 and 1.  1 indicates that the two variables are moving in unison.
+
+*   However, `R2` shows percentage variation in y which is explained by all the x variables together. Higher the better. It is always between 0 and 1. It can never be negative – since it is a squared value.
+
+## Univarite Regression
+
+### R2 - Coefficient of Determination
+
+Discussed above, the `R^2` or "R-squared" is a common way to validate the predictions of a linear model. Below we run a linear model on our data with the `lm()` function and get the output in our R terminal. At first this is an intimidating amount of information! Here is a [great resource](https://towardsdatascience.com/understanding-linear-regression-output-in-r-7a9cbda948b3) to understand how that output is organized and what it means.  
+
+What we are focusing on here is that `R-squared`,  `Adjusted R-squared` and the `Coefficients`.
+
+What's the `R2` good for as a diagnostic of model quality?
+
+Can somebody interpret the coefficient?
+
+Note: Here we use `ggscatter` with the `..rr.label` argument to show the `R2` Coefficient of Determination.
+
+```{r simple_reg}
+livingReg <- lm(price ~ heatedarea, data = nc_sub_200k)
+
+summary(livingReg)
+
+ggscatter(nc_sub_200k,
+          x = "heatedarea",
+          y = "price",
+          add = "reg.line") +
+  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), label.y = 2500000) +
+  stat_regline_equation(label.y = 2250000) 
+```
+
+
+## Prediction example
+
+Make a prediction using the coefficient, intercept etc.,
+
+```{r calculate prediction}
+coefficients(livingReg)
+
+new_heatedarea = 4000
+
+# "by hand"
+378370.01571  + 88.34939 * new_heatedarea
+
+# predict() function
+predict(livingReg, newdata = data.frame(heatedarea = 4000))
+```
+
+
+## Multivariate Regression
+
+Let's take a look at this regression - how are we creating it?
+
+What's up with these categorical variables?
+
+Better R-squared - does that mean it's a better model?
+
+```{r mutlivariate_regression}
+nc_sub_200k1 <- nc_sub_200k[nc_sub_200k$bedrooms <= 9,]
+reg1 <- lm(price ~ ., data = nc_sub_200k1 %>% 
+                                 dplyr::select(price, percentheated, ac, totalac, municipali, 
+                                               storyheigh, numfirepla, fullbaths, halfbaths,
+                                               bedrooms, grade, Age, lagPrice))
+
+summary(reg1)
+
+```
+
+## Marginal Response Plots
+
+Let's try some of these out. They help you learn more about the relationships in the model.
+
+What does a long line on either side of the blue circle suggest?
+
+What does the location of the blue circle relative to the center line at zero suggest?
+
+```{r effect_plots}
+## Plot of marginal response
+effect_plot(reg1, pred = heatedarea, interval = TRUE, plot.points = TRUE)
+
+## Plot coefficients
+plot_summs(reg1, scale = TRUE)
+
+## plot multiple model coeffs
+plot_summs(reg1, livingReg)
+
+
+```
+
+Challenges:
+What is the Coefficient of LivingArea when Average Distance to 2-nearest crimes are considered?
+## Build a regression with LivingArea and crime_nn2
+## report regression coefficient for LivingArea
+## Is it different? Why?
+
+## Try to engineer a 'fixed effect' out of the other variables in an attempt to parameterize a variable that suggests a big or fancy house or levels of fanciness.
+## How does this affect your model?
+
+## Make Buffers 
+
+```{r}
+NC_Buffers <- 
+  rbind(
+    st_buffer(NC_Data, 2640) %>%
+      mutate(Legend = "Buffer") %>%
+      dplyr::select(Legend),
+    st_union(st_buffer(NC_Data, 2640)) %>%
+      st_sf() %>%
+      mutate(Legend = "Unioned Buffer"))
+```
+
+
+#new code: setting up tests
+```{r}
+## feature engineering part 1
+
+NCData.sf$Age <- (2022 - as.numeric(NCData.sf$yearbuilt))
+NCData.sf$ac <- ifelse(NCData.sf$actype == "AC-NONE", 0, 1)
+building_grades <- c("MINIMUM","FAIR","AVERAGE","GOOD","VERY GOOD","EXCELLENT","CUSTOM")
+NCData.sf$grade <- factor(NCData.sf$bldggrade, levels = building_grades, labels = 0:6)
+NCData.sf$percentheated <- (NCData.sf$heatedarea/NCData.sf$shape_Area)
+months <- c("01","02","03","04","05","06","07","08","09","10","11","12")
+NCData.sf$year <- factor(NCData.sf$sale_year)
+NCData.sf$month <- factor(substr(NCData.sf$dateofsale, 6, 7), months, labels = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"))
+
+
+## split test vs train
+
+modelling_df <- NCData.sf[NCData.sf$toPredict == "MODELLING",]
+chalenge_df <- NCData.sf[NCData.sf$toPredict == "CHALLENGE",]
+
+inTrain <- createDataPartition(
+              y = paste(modelling_df$zipcode, modelling_df$price), 
+              p = .60, list = FALSE)
+
+Charlotte.training <- modelling_df[inTrain,] 
+Charlotte.test <- modelling_df[-inTrain,] 
+
+## feature engineering  part 2 (spatial lag) -- post test/train split ##
+
+# train
+coords_train <- st_coordinates(Charlotte.training) 
+
+neighborList_train <- knn2nb(knearneigh(coords_train, 5))
+
+spatialWeights_train <- nb2listw(neighborList_train, style="W")
+
+Charlotte.training$lagPrice <- lag.listw(spatialWeights_train, Charlotte.training$price)
+
+# test
+
+coords_test <- st_coordinates(Charlotte.test) 
+
+neighborList_test <- knn2nb(knearneigh(coords_test, 5))
+
+spatialWeights_test<- nb2listw(neighborList_test, style="W")
+
+Charlotte.test$lagPrice <- lag.listw(spatialWeights_test, Charlotte.test$price)
+
+##
+
+Charlotte.training <- st_drop_geometry(Charlotte.training)
+reg1 <- lm(price ~ ., data =  Charlotte.training %>% 
+                                 dplyr::select(price, percentheated, ac, totalac, year, 
+                                               storyheigh, numfirepla, fullbaths, halfbaths,
+                                               bedrooms, grade, Age, lagPrice, zipcode, units, month, grocery_nn1, proj_nn1))
+
+Charlotte.test <- st_drop_geometry(Charlotte.test)
+Charlotte.test <- Charlotte.test %>%
+  mutate(Regression = "Baseline Regression",
+         price.Predict = predict(reg1, Charlotte.test),
+         price.Error = price.Predict - price,
+         price.AbsError = abs(price.Predict - price),
+         price.APE = (abs(price.Predict - price)) / price.Predict)%>%
+  filter(price < 5000000) 
+
+
+```
+
+#Spatial Lag - do prices and errors cluster?
+#Let’s consider a spatial autocorrelation test that correlates home prices with nearby home prices. 
+#To do so, the code block below introduces new feature engineering that calculates for each home sale, the average sale price of its k nearest neighbors. In spatial analysis parlance, this is the ‘spatial lag’, and it is measured using a series of functions from the spdep package.
+
+```{r}
+coords <- st_coordinates(NCData.sf) 
+
+neighborList <- knn2nb(knearneigh(coords, 5))
+
+spatialWeights <- nb2listw(neighborList, style="W")
+
+NCData.sf$lagPrice <- lag.listw(spatialWeights, NCData.sf$price)
+```
+
+#How about for model errors? The code block below replicates the spatial lag procedure for SalePrice.Error, calculating the lag directly in the mutate of ggplot.
+```{r}
+Hidecoords.test <-  st_coordinates(boston.test) 
+
+neighborList.test <- knn2nb(knearneigh(coords.test, 5))
+
+spatialWeights.test <- nb2listw(neighborList.test, style="W")
+ 
+boston.test %>% 
+  mutate(lagPriceError = lag.listw(spatialWeights.test, SalePrice.Error)) %>%
+  ggplot(aes(lagPriceError, SalePrice.Error))
+```
+
+#Do spatial errors cluster? Moran's I
+```{r}
+moranTest <- moran.mc(boston.test$SalePrice.Error, 
+                      spatialWeights.test, nsim = 999)
+
+ggplot(as.data.frame(moranTest$res[c(1:999)]), aes(moranTest$res[c(1:999)])) +
+  geom_histogram(binwidth = 0.01) +
+  geom_vline(aes(xintercept = moranTest$statistic), colour = "#FA7800",size=1) +
+  scale_x_continuous(limits = c(-1, 1)) +
+  labs(title="Observed and permuted Moran's I",
+       subtitle= "Observed Moran's I in orange",
+       x="Moran's I",
+       y="Count") +
+  plotTheme()
+```
+
+#Accoutning for neighborhood
+#For some intuition, the code block below regresses SalePrice as a function of neighborhood fixed effects, Name. A table is created showing that for each neighborhood, the mean SalePrice and the meanPrediction are identical. Thus, accounting for neighborhood effects accounts for the neighborhood mean of prices, and hopefully, some of the spatial process that was otherwise omitted from the model. Try to understand how left_join helps create the below table.
+```{r}
+left_join(
+  st_drop_geometry(boston.test) %>%
+    group_by(Name) %>%
+    summarize(meanPrice = mean(SalePrice, na.rm = T)),
+  mutate(boston.test, predict.fe = 
+                        predict(lm(SalePrice ~ Name, data = boston.test), 
+                        boston.test)) %>%
+    st_drop_geometry %>%
+    group_by(Name) %>%
+      summarize(meanPrediction = mean(predict.fe))) %>%
+      kable() %>% kable_styling()
+```
+
+#The code block below estimates reg.nhood and creates a data frame, boston.test.nhood, with all goodness of fit metrics.
+```{r}
+reg.nhood <- lm(SalePrice ~ ., data = as.data.frame(boston.training) %>% 
+                                 dplyr::select(Name, SalePrice, LivingArea, 
+                                               Style, GROSS_AREA, NUM_FLOORS.cat,
+                                               R_BDRMS, R_FULL_BTH, R_HALF_BTH, 
+                                               R_KITCH, R_AC, R_FPLACE,crimes.Buffer))
+
+boston.test.nhood <-
+  boston.test %>%
+  mutate(Regression = "Neighborhood Effects",
+         SalePrice.Predict = predict(reg.nhood, boston.test),
+         SalePrice.Error = SalePrice.Predict- SalePrice,
+         SalePrice.AbsError = abs(SalePrice.Predict- SalePrice),
+         SalePrice.APE = (abs(SalePrice.Predict- SalePrice)) / SalePrice)%>%
+  filter(SalePrice < 5000000)
+```
+
+#Accurarcy of neighborhood model
+#The code block below binds error metrics from bothRegresions, calculating a lagPriceError for each.
+```{r}
+bothRegressions <- 
+  rbind(
+    dplyr::select(boston.test, starts_with("SalePrice"), Regression, Name) %>%
+      mutate(lagPriceError = lag.listw(spatialWeights.test, SalePrice.Error)),
+    dplyr::select(boston.test.nhood, starts_with("SalePrice"), Regression, Name) %>%
+      mutate(lagPriceError = lag.listw(spatialWeights.test, SalePrice.Error)))  
+```
+
+#First, a table is created describing the MAE and MAPE for bothRegressions. The Neighborhood Effects model is more accurate on both a dollars and percentage basis
+```{r}
+st_drop_geometry(bothRegressions) %>%
+  gather(Variable, Value, -Regression, -Name) %>%
+  filter(Variable == "SalePrice.AbsError" | Variable == "SalePrice.APE") %>%
+  group_by(Regression, Variable) %>%
+    summarize(meanValue = mean(Value, na.rm = T)) %>%
+    spread(Variable, meanValue) %>%
+    kable()
+```
+
+#Next, predicted prices are plotted as a function of observed prices. Recall the orange line represents a would-be perfect fit, while the green line represents the predicted fit. The Neighborhood Effects model clearly fits the data better, and does so for all price levels, low, medium and high. Note, for these plots, Regression is the grouping variable in facet_wrap.The neighborhood effects added much predictive power, perhaps by explaining part of the spatial process. As such, we should now expect less clustering or spatial autocorrelation in model errors.
+```{r}
+bothRegressions %>%
+  dplyr::select(SalePrice.Predict, SalePrice, Regression) %>%
+    ggplot(aes(SalePrice, SalePrice.Predict)) +
+  geom_point() +
+  stat_smooth(aes(SalePrice, SalePrice), 
+             method = "lm", se = FALSE, size = 1, colour="#FA7800") + 
+  stat_smooth(aes(SalePrice.Predict, SalePrice), 
+              method = "lm", se = FALSE, size = 1, colour="#25CB10") +
+  facet_wrap(~Regression) +
+  labs(title="Predicted sale price as a function of observed price",
+       subtitle="Orange line represents a perfect prediction; Green line represents prediction") +
+  plotTheme()
+```
+
+#generalizability in the neighborhood model
+#Figure 4.8 below maps the mean MAPE by nhoods for bothRegressions
+```{r}
+st_drop_geometry(bothRegressions) %>%
+  group_by(Regression, Name) %>%
+  summarize(mean.MAPE = mean(SalePrice.APE, na.rm = T)) %>%
+  ungroup() %>% 
+  left_join(nhoods) %>%
+    st_sf() %>%
+    ggplot() + 
+      geom_sf(aes(fill = mean.MAPE)) +
+      geom_sf(data = bothRegressions, colour = "black", size = .5) +
+      facet_wrap(~Regression) +
+      scale_fill_gradient(low = palette5[1], high = palette5[5],
+                          name = "MAPE") +
+      labs(title = "Mean test set MAPE by neighborhood") +
+      mapTheme()
+```
+
+#To test generalizability across urban contexts, tidycensus downloads Census data to define a raceContext and an incomeContext (don’t forget your census_api_key). output = "wide" brings in the data in wide form. Census tracts where at least 51% of residents are white receive a Majority White designation. Tracts with incomes greater than the citywide mean receive a High Income designation.
+```{r}
+tracts17 <- 
+  get_acs(geography = "tract", variables = c("B01001_001E","B01001A_001E","B06011_001"), 
+          year = 2017, state=25, county=025, geometry=T, output = "wide") %>%
+  st_transform('ESRI:102286')  %>%
+  rename(TotalPop = B01001_001E,
+         NumberWhites = B01001A_001E,
+         Median_Income = B06011_001E) %>%
+  mutate(percentWhite = NumberWhites / TotalPop,
+         raceContext = ifelse(percentWhite > .5, "Majority White", "Majority Non-White"),
+         incomeContext = ifelse(Median_Income > 32322, "High Income", "Low Income"))
+
+grid.arrange(ncol = 2,
+  ggplot() + geom_sf(data = na.omit(tracts17), aes(fill = raceContext)) +
+    scale_fill_manual(values = c("#25CB10", "#FA7800"), name="Race Context") +
+    labs(title = "Race Context") +
+    mapTheme() + theme(legend.position="bottom"), 
+  ggplot() + geom_sf(data = na.omit(tracts17), aes(fill = incomeContext)) +
+    scale_fill_manual(values = c("#25CB10", "#FA7800"), name="Income Context") +
+    labs(title = "Income Context") +
+    mapTheme() + theme(legend.position="bottom"))
+```
+
+#generalizaibility tables
+```{r}
+st_join(bothRegressions, tracts17) %>% 
+  group_by(Regression, raceContext) %>%
+  summarize(mean.MAPE = scales::percent(mean(SalePrice.APE, na.rm = T))) %>%
+  st_drop_geometry() %>%
+  spread(raceContext, mean.MAPE) %>%
+  kable(caption = "Test set MAPE by neighborhood racial context")
+```
+
+```{r}
+st_join(bothRegressions, tracts17) %>% 
+  filter(!is.na(incomeContext)) %>%
+  group_by(Regression, incomeContext) %>%
+  summarize(mean.MAPE = scales::percent(mean(SalePrice.APE, na.rm = T))) %>%
+  st_drop_geometry() %>%
+  spread(incomeContext, mean.MAPE) %>%
+  kable(caption = "Test set MAPE by neighborhood income context")
+```
+
