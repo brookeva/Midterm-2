@@ -56,23 +56,13 @@ See if you can change the chunk options to get rid of the text outputs
 
 ```{r read_data}
 
-ImprovProj <- 
-  st_read("Capital_Improvement_Projects_Points.geojson") %>%
-  st_transform('ESRI:102286')
-
-Groceries <- st_read("Grocery_Stores_(points).geojson")
-
 NCData.sf <- 
   NC_Data %>% 
  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
   st_transform('ESRI:102286') %>%
   distinct()
 
-ImproveProj.sf <- 
-  ImprovProj %>% 
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
-  st_transform('ESRI:102286') %>%
-  distinct()
+Groceries <- st_read("Grocery_Stores_(points).geojson")
 
 Groceries.sf <- 
   Groceries %>% 
