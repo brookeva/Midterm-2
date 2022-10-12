@@ -4,6 +4,9 @@ author: "Brooke Acosta, Kate Tanabe"
 output: html_document
 ---
 
+## Introduction - Brooke 
+
+
 ```{r setup, include=FALSE}
 
 # You can set some global options for knitting chunks
@@ -51,6 +54,8 @@ The learning objectives of this lab are:
 *   Linear Regression model goodness-of-fit and R2 - Coefficient of Determination
 
 The in-class exercise at the end encourages students to modify the existing code to create a different regression and interpret it. Finally, there is a prompt to create a new feature and add it to the regression.
+## Data Discussion - Brooke 
+
 
 ## Data Wrangling
 
@@ -83,6 +88,8 @@ Groceries.sf <-
   distinct()
 
 ```
+## Methods - Brooke 
+
 
 ### Mapping 
 
@@ -92,16 +99,54 @@ See if you can alter the size of the image output. Search for adjusting figure h
 
 # 1 map of your dependent variable (sale price) 
 
-NCData.sf$PricePerArea <- NC_Data$price/NC_Data$heatedarea
+NC_Data$PricePerArea <- NC_Data$price/NC_Data$heatedarea
 
 ggplot() +
-  geom_sf(data = NCData.sf, aes(colour = q5(PricePerArea)), 
+  geom_sf(data = NC_Data, aes(colour = q5(PricePerArea)), 
           show.legend = "point", size = .75) +
   scale_colour_manual(values = palette5,
                    labels= qBr(NCData.sf, "price"),
                    name="Quintile\nBreaks") +
   labs(title="Price Per Square Foot, Charlotte") +
   mapTheme()
+
+# Map of Independent Variable - Building Grade
+
+NC_Data$Age <- (2022 - as.numeric(NCData.sf$yearbuilt))
+NC_Data$ac <- ifelse(NCData.sf$actype == "AC-NONE", 0, 1)
+building_grades <- c("MINIMUM","FAIR","AVERAGE","GOOD","VERY GOOD","EXCELLENT","CUSTOM")
+NC_Data$grade <- factor(NCData.sf$bldggrade, levels = building_grades, labels = 0:6)
+NC_Data$percentheated <- (NCData.sf$heatedarea/NCData.sf$shape_Area)
+months <- c("01","02","03","04","05","06","07","08","09","10","11","12")
+NC_Data$year <- factor(NCData.sf$sale_year)
+NC_Data$month <- factor(substr(NCData.sf$dateofsale, 6, 7), months, labels = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"))
+
+
+
+# Building Grade Map
+ggplot() +
+  geom_sf(data = NC_Data, aes(colour = q5(grade)),
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels=("Charlotte,Grade"),
+                   name="Quintile\nBreaks") +
+  labs(title="Grade, Charlotte") +
+  mapTheme()
+
+# Age Map 
+
+ggplot()+
+  geom_sf(data = NCData.sf, aes(fill = NCData.sf),
+          color = "transparent")+
+  geom_sf(data = NCData.sf %>%
+            st_union(),
+          color = "grade",
+          fill = "transparent")+
+  labs(
+    title = "Percentage of vacant housing units by tract",
+    subtitle = "",
+    caption = "Data: US Census Bureau, ACS 5-year estimates")
+
 ```
 
 
@@ -224,16 +269,7 @@ NCData.sf <-
 
 ## Map of 2nd Independent Variable - Cap Improvement Projects 
 
-ggplot() + 
-  geom_sf(data=st_union(Groceries.sf)) +
-  geom_sf(data=Groceries.sf, 
-          aes(colour = Line), 
-          show.legend = "point", size= 2) +
-  scale_colour_manual(values = c("orange","blue")) +
-  labs(title="Grocery Store Exposure", 
-       subtitle="Charlotte, NC", 
-       caption="Figure") +
-  mapTheme()
+
 ```
 
 ```{r assault density}
@@ -260,9 +296,48 @@ Can you give me a one-sentence description of what the takeaway is?
 
 ```{r Correlation}
 
-## Home Features cor
+NCData.sf$Age <- (2022 - as.numeric(NCData.sf$yearbuilt))
+NCData.sf$ac <- ifelse(NCData.sf$actype == "AC-NONE", 0, 1)
+building_grades <- c("MINIMUM","FAIR","AVERAGE","GOOD","VERY GOOD","EXCELLENT","CUSTOM")
+NCData.sf$grade <- factor(NCData.sf$bldggrade, levels = building_grades, labels = 0:6)
+NCData.sf$percentheated <- (NCData.sf$heatedarea/NCData.sf$shape_Area)
+months <- c("01","02","03","04","05","06","07","08","09","10","11","12")
+NCData.sf$year <- factor(NCData.sf$sale_year)
+NCData.sf$month <- factor(substr(NCData.sf$dateofsale, 6, 7), months, labels = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"))
+
+## Home Features Correlation #1 - percent heated
 st_drop_geometry(NCData.sf) %>% 
-  dplyr::select(price, landusecod) %>%
+  dplyr::select(price, percentheated) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of continuous variables")
+
+## Home Features Correlation #2 - building grade
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, grade) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of continuous variables")
+
+## Home Features Correlation #3 - Grocery KNN
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, grocery_nn1) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of continuous variables")
+
+## Home Features Correlation #4 - Capital Improvement KNN
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, percentheated) %>%
   filter(price <= 1000000) %>%
   gather(Variable, Value, -price) %>% 
    ggplot(aes(Value, price)) +
@@ -271,29 +346,11 @@ st_drop_geometry(NCData.sf) %>%
      labs(title = "Price as a function of continuous variables")
 ```
 
-Can we resize this somehow to make it look better?
-
-```{r crime_corr}
-## Crime cor
-NCData.sf %>%
-  st_drop_geometry() %>%
-  mutate(Age = 2015 - yearbuilt) %>%
-  filter(price <= 1000000) %>%
-  gather(Variable, Value, -price) %>% 
-   ggplot(aes(Value, price)) +
-     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
-     facet_wrap(~Variable, nrow = 1, scales = "free") +
-     labs(title = "Price as a function of continuous variables") +
-     plotTheme()
-```
-
 ## Correlation matrix
 
 A correlation matrix gives us the pairwise correlation of each set of features in our data. It is usually advisable to include the target/outcome variable in this so we can understand which features are related to it.
 
 Some things to notice in this code; we use `select_if()` to select only the features that are numeric. This is really handy when you don't want to type or hard-code the names of your features; `ggcorrplot()` is a function from the `ggcorrplot` package.
-
-
 
 # Univarite correlation -> multi-variate OLS regression
 
@@ -304,22 +361,6 @@ Pearson's r Learning links:
 *   [Correlation Test Between Two Variables in R](http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r)
 
 Note: the use of the `ggscatter()` function from the `ggpubr` package to plot the *Pearson's rho* or *Pearson's r* statistic; the Correlation Coefficient. This number can also be squared and represented as `r2`. However, this differs from the `R^2` or `R2` or "R-squared" of a linear model fit, known as the Coefficient of Determination. This is explained a bit more below.
-
-```{r uni_variate_Regression}
-nc_sub_200k <- st_drop_geometry(NCData.sf) %>% 
-filter(price <= 2000000) 
-
-cor.test(nc_sub_200k$heatedarea,
-         nc_sub_200k$price, 
-         method = "pearson")
-
-ggscatter(nc_sub_200k,
-          x = "heatedarea",
-          y = "price",
-          add = "reg.line") +
-  stat_cor(label.y = 2500000) 
-
-```
 
 **Let's take a few minutes to interpret this**
 
@@ -334,12 +375,6 @@ ggcorrplot(
   type = "lower",
   insig = "blank") +  
     labs(title = "Correlation across numeric variables") 
-
-# yet another way to plot the correlation plot using the corrr library
-numericVars %>% 
-  correlate() %>% 
-  autoplot() +
-  geom_text(aes(label = round(r,digits=2)),size = 2)
 
 ```
 The Pearson's rho - Correlation Coefficient and the R2 Coefficient of Determination are **very** frequently confused! It is a really common mistake, so take a moment to understand what they are and how they differ. [This blog](https://towardsdatascience.com/r%C2%B2-or-r%C2%B2-when-to-use-what-4968eee68ed3) is a good explanation. In summary:
@@ -362,36 +397,7 @@ Can somebody interpret the coefficient?
 
 Note: Here we use `ggscatter` with the `..rr.label` argument to show the `R2` Coefficient of Determination.
 
-```{r simple_reg}
-livingReg <- lm(price ~ heatedarea, data = nc_sub_200k)
-
-summary(livingReg)
-
-ggscatter(nc_sub_200k,
-          x = "heatedarea",
-          y = "price",
-          add = "reg.line") +
-  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), label.y = 2500000) +
-  stat_regline_equation(label.y = 2250000) 
-```
-
-
 ## Prediction example
-
-Make a prediction using the coefficient, intercept etc.,
-
-```{r calculate prediction}
-coefficients(livingReg)
-
-new_heatedarea = 4000
-
-# "by hand"
-378370.01571  + 88.34939 * new_heatedarea
-
-# predict() function
-predict(livingReg, newdata = data.frame(heatedarea = 4000))
-```
-
 
 ## Multivariate Regression
 
@@ -401,37 +407,7 @@ What's up with these categorical variables?
 
 Better R-squared - does that mean it's a better model?
 
-```{r mutlivariate_regression}
-nc_sub_200k1 <- nc_sub_200k[nc_sub_200k$bedrooms <= 9,]
-reg1 <- lm(price ~ ., data = nc_sub_200k1 %>% 
-                                 dplyr::select(price, percentheated, ac, totalac, municipali, 
-                                               storyheigh, numfirepla, fullbaths, halfbaths,
-                                               bedrooms, grade, Age, lagPrice))
-
-summary(reg1)
-
-```
-
 ## Marginal Response Plots
-
-Let's try some of these out. They help you learn more about the relationships in the model.
-
-What does a long line on either side of the blue circle suggest?
-
-What does the location of the blue circle relative to the center line at zero suggest?
-
-```{r effect_plots}
-## Plot of marginal response
-effect_plot(reg1, pred = heatedarea, interval = TRUE, plot.points = TRUE)
-
-## Plot coefficients
-plot_summs(reg1, scale = TRUE)
-
-## plot multiple model coeffs
-plot_summs(reg1, livingReg)
-
-
-```
 
 Challenges:
 What is the Coefficient of LivingArea when Average Distance to 2-nearest crimes are considered?
@@ -700,4 +676,11 @@ st_join(bothRegressions, tracts17) %>%
   spread(incomeContext, mean.MAPE) %>%
   kable(caption = "Test set MAPE by neighborhood income context")
 ```
+
+## Results - Kate 
+
+## Discussion - Kate 
+
+## Conclusion - Brooke 
+
 
