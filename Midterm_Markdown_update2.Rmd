@@ -313,7 +313,7 @@ st_drop_geometry(NCData.sf) %>%
    ggplot(aes(Value, price)) +
      geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
      facet_wrap(~Variable, ncol = 3, scales = "free") +
-     labs(title = "Price as a function of continuous variables")
+     labs(title = "Price as a function of Heated Area")
 
 ## Home Features Correlation #2 - building grade
 st_drop_geometry(NCData.sf) %>% 
@@ -323,7 +323,7 @@ st_drop_geometry(NCData.sf) %>%
    ggplot(aes(Value, price)) +
      geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
      facet_wrap(~Variable, ncol = 3, scales = "free") +
-     labs(title = "Price as a function of continuous variables")
+     labs(title = "Price as a function of Building Grade")
 
 ## Home Features Correlation #3 - Grocery KNN
 st_drop_geometry(NCData.sf) %>% 
@@ -333,7 +333,7 @@ st_drop_geometry(NCData.sf) %>%
    ggplot(aes(Value, price)) +
      geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
      facet_wrap(~Variable, ncol = 3, scales = "free") +
-     labs(title = "Price as a function of continuous variables")
+     labs(title = "Price as a function of Exposure to Grocery Stores")
 
 ## Home Features Correlation #4 - Capital Improvement KNN
 st_drop_geometry(NCData.sf) %>% 
@@ -343,7 +343,7 @@ st_drop_geometry(NCData.sf) %>%
    ggplot(aes(Value, price)) +
      geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
      facet_wrap(~Variable, ncol = 3, scales = "free") +
-     labs(title = "Price as a function of continuous variables")
+     labs(title = "Price as a function of Exposure to Capital Improvement Projects")
 ```
 
 ## Correlation matrix
