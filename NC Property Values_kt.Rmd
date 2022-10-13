@@ -30,6 +30,8 @@ library(jtools)     # for regression model plots
 library(ggstance) # to support jtools plots
 library(ggpubr)    # plotting R^2 value on ggplot point scatter
 library(broom.mixed) # needed for effects plots
+install.packages("stargazer")
+library(stargazer)
 
 # functions and data directory"
 
@@ -81,6 +83,7 @@ Groceries.sf <-
 
 # Introduction
 
+Text 
 
 # Data
 
@@ -90,33 +93,132 @@ This project used data from Macklenberg County to predict property values. Sever
 
 ```{r pressure, echo=FALSE}
 # Present table of summary statistics with variable descriptions. Sort these variables by their category (internal characteristics, amenities/public services or spatial structure). Check out the `stargazer` package for this. 
+
+NCData.sf$Age <- (2022 - as.numeric(NCData.sf$yearbuilt))
+Charlotte.test1 <- filter(NCData.sf, Age < 2022)
+NCData.sf$ac <- ifelse(NCData.sf$actype == "AC-NONE", 0, 1)
+NCData.sf$heat <- ifelse(NCData.sf$aheatingty == "AC-NONE", 0, 1)
+building_grades <- c("MINIMUM","FAIR","AVERAGE","GOOD","VERY GOOD","EXCELLENT","CUSTOM")
+NCData.sf$grade <- factor(NCData.sf$bldggrade, levels = building_grades, labels = 0:6)
+NCData.sf$percentheated <- (NCData.sf$heatedarea/NCData.sf$shape_Area)
+months <- c("01","02","03","04","05","06","07","08","09","10","11","12")
+NCData.sf$year <- factor(NCData.sf$sale_year)
+NCData.sf$month <- factor(substr(NCData.sf$dateofsale, 6, 7), months, labels = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"))
+NCData.sf$basement <- ifelse(NCData.sf$foundation == "BASEMENT", 1, 0)
+
+InternalCharacteristics = model.matrix (~NCData.sf$price +
+                                   NCData.sf$bedrooms+
+                                   NCData.sf$fullbaths+
+                                   NCData.sf$halfbaths+
+                                   NCData.sf$percentheated+
+                                   NCData.sf$basement+
+                                  NCData.sf$ac+
+                                   NCData.sf$totalac+
+                                   NCData.sf$year+
+                                   NCData.sf$storyheigh+
+                                   NCData.sf$grade+
+                                    NCData.sf$numfirepla+
+                                   NCData.sf$Age+
+                                    NCData.sf$units+
+                                    NCData.sf$month- 1,
+                                 NCData.sf = trainData1) %>%
+  as.data.frame()
+
+stargazer(IntrinsicFeatures,
+          type = "html",
+          digits = 1,
+          title = "Table 1. Summary statistics of predictors - intrinsic features",
+          out.header = TRUE,
+          covariate.labels = c("Total finished area square feet",
+                               "Design type - Ranch",
+                               "Design type -  2-3 story",
+                               "Design type - Bi-level",
+                               "Design type - Multi-story-townhouse",
+                               "Design type - Split-level",
+                               "Quality - Average +",
+                               "Quality - Average ++")
+
 ```
 
 Once this data was gathered, our team was prepared to conduct some exploratory data analysis to identify the impact that our variables had on sales price. One example of this can be observed in Figure 1 below, which reflects the sales price of properties as a function of building area. Additional visualizations of the variables selected for prediction in this project will be presented in the methods and results section of this report. 
 
-### Figure 1 - Property Sales Prices as a Function of Building Area 
+### Figure 1 - Property Sales Prices as a Function of Building Area Map
 
 ```{r}
+NC_Data$PricePerArea <- NC_Data$price/NC_Data$heatedarea
+
+ggplot() +
+    geom_sf(data = NPA.sf, fill = "white") +
+  geom_sf(data = NC_Data, aes(colour = q5(PricePerArea)), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels= qBr(NCData.sf, "price"),
+                   name="Quintile\nBreaks") +
+  labs(title="Price Per Square Foot, Charlotte") +
+  mapTheme()
 
 ```
 
 During the early stages of our exploratory data analysis, our team created four price correlation scatterplots to visualize the relationship between our variables and property sales price. These visualizations are presented in Figures 1 through 4 below and reflect the relationship between building grade, percent of heated area, property exposure to grocery stores, and property exposure to capital improvement projects. These scatterplots indicate a strong, positive, linear relationship between the selected variables and property sales price. Figure 5 below also visualizes the relationship between these variables and property sales price in a spatial format. Based on these findings, these variables were selected for future analysis in our OLS Regression Model discussed in the Methods section below.
 
-### Figure 2 - Building Grade Price Correlation Scatterplot
+### Figure 2 - Building Age Price Correlation Scatterplot
 
 ```{r}
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, Age) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of Building Grade")
 
 ```
 
 ### Figure 3 - Percent Heated Price Correlation Scatterplot
 
 ```{r}
-
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, percentheated) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of Heated Area")
 ```
 
 ### Figure 4 - Grocery Stores Correlation Scatterplot
 
 ```{r}
+
+## Nearest Neighbor Neighbor - grocery stores
+
+NCData.sf <-
+  NCData.sf %>% 
+    mutate(
+      grocery_nn1 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 1),
+      
+      grocery_nn2 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 2), 
+      
+      grocery_nn3 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 3), 
+      
+      grocery_nn4 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 4), 
+      
+      grocery_nn5 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(Groceries.sf), k = 5))
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, grocery_nn1) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of Exposure to Grocery Stores")
 
 ```
 
@@ -124,23 +226,82 @@ During the early stages of our exploratory data analysis, our team created four 
 
 ```{r}
 
+## Nearest Neighbor Neighbor - cap Improvement projects
+
+NCData.sf <-
+  NCData.sf %>% 
+    mutate(
+      proj_nn1 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 1),
+      
+      proj_nn2 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 2), 
+      
+      proj_nn3 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 3), 
+      
+      proj_nn4 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 4), 
+      
+      proj_nn5 = nn_function(st_coordinates(NCData.sf), 
+                              st_coordinates(ImproveProj.sf), k = 5))
+st_drop_geometry(NCData.sf) %>% 
+  dplyr::select(price, percentheated) %>%
+  filter(price <= 1000000) %>%
+  gather(Variable, Value, -price) %>% 
+   ggplot(aes(Value, price)) +
+     geom_point(size = .5) + geom_smooth(method = "lm", se=F, colour = "#FA7800") +
+     facet_wrap(~Variable, ncol = 3, scales = "free") +
+     labs(title = "Price as a function of Exposure to Capital Improvement Projects")
+
 ```
 
-### Figure 6 - Sales Price as a Function of Building Grade Map 
+### Figure 6 - Sales Price as a Function of Building Age Map 
 
 ```{r}
 
+ggplot() +
+    geom_sf(data = NPA.sf, fill = "white") +
+  geom_sf(data = NCData.sf, aes(colour = q5(Age)), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels= qBr(NCData.sf, "Age"),
+                   name="Quintile\nBreaks") +
+  labs(title="Building Age, Charlotte") +
+  mapTheme()
+
 ```
 
-### Figure 7 - Sales Price as a Function of a Building's Percent Heated Area
+### Figure 7 - Sales Price as a Function of a Building's Percent Heated Area Map
 
 ```{r}
 
+ggplot() +
+    geom_sf(data = NPA.sf, fill = "white") +
+  geom_sf(data = NCData.sf, aes(colour = q5(percentheated)), 
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels= qBr(NCData.sf, "price"),
+                   name="Quintile\nBreaks") +
+  labs(title="Percent of Property Heated Area, Charlotte") +
+  mapTheme()
+
 ```
 
-### Figure 8 - Sales Price as a Function of Exposure to Grocery Stores
+### Figure 8 - Sales Price as a Function of Exposure to Grocery Stores Map
 
 ```{r}
+
+ggplot() +
+  geom_sf(data = NPA.sf, fill = "white") +
+  geom_sf(data = NCData.sf, aes(colour = q5(NCData.sf$grocery_nn1)),
+          show.legend = "point", size = .75) +
+  scale_colour_manual(values = palette5,
+                   labels=qBr(NCData.sf,"grocery_nn1"),
+                   name="Quintile\nBreaks") +
+  labs(title="Property Exposure to Grocery Stores, Charlotte") +
+  mapTheme()
+```
 
 ```
 
@@ -149,7 +310,17 @@ Our team also created a correlation matrix to visualize the correlation between 
 ### Figure 9 - Price Correlation Matrix
 
 ```{r}
+numericVars <- 
+  select_if(NC_data, is.numeric) %>% na.omit()
 
+ggcorrplot(
+  round(cor(numericVars), 1), 
+  p.mat = cor_pmat(numericVars),
+  colors = c("#25CB10", "white", "#FA7800"),
+  type = "lower",
+  insig = "blank") +  
+    labs(title = "Correlation across numeric variables")
+    
 ```
 
 # Methods
@@ -167,13 +338,19 @@ The table below provides a summary of our model, including our model’s r-squar
 #summary table for training set
 summary_table <- summary(reg1) 
 
-install.packages("stargazer")
-library(stargazer)
-
-stargazer(reg1, type="text", style="qje", digits=2, 
-          title = "Linear Regression Summary Results",
-          dep.var.labels = "Home Price",
-          covariate.labels = c("Bedrooms", "Full Bathrooms", "Half Bathrooms", "Percent Area Heated", "Basement", "AC" , "Total Acres", "Sold 2021", "Sold 2022", "Sold 2020", "1 Story", "1.5 Stories", "2 Stories", "2.5 Stories", "3.0 Stories", "Bi-Level", "Cape Cod Style", "Ranch Style", "Split Level", "Fireplaces", "Heat", "Grade: Fair", "Grade: Average", "Grade: Good", "Grade: Very Good", "Grade: Excellent", "Grade: Custom", "Age", "Cornelius", "Davidson", "Huntersville", "Matthews", "Mint Hill", "Pineville", "Stallings", "Unincorporated",  "Units", "Sold Feb", "Sold Mar", "Sold Apr", "Sold May", "Sold Jun", "Sold Jul", "Sold Aug", "Sold Sept", "Sold Oct", "Sold Nov", "Sold Dec", "Grocery Store Exposure", "Improvement Project Exposure"))
+stargazer(IntrinsicFeatures,
+          type = "html",
+          digits = 1,
+          title = "Table 1. Summary statistics of predictors - intrinsic features",
+          out.header = TRUE,
+          covariate.labels = c("Total finished area square feet",
+                               "Design type - Ranch",
+                               "Design type -  2-3 story",
+                               "Design type - Bi-level",
+                               "Design type - Multi-story-townhouse",
+                               "Design type - Split-level",
+                               "Quality - Average +",
+                               "Quality - Average ++")
 ```
 
 After running our model on the test set, we found that the mean absolute error (MAE) of our predictions was $117,252.50 and the mean absolute percentage error (MAPE) of our predictions was about 11.3%. These figures are presented in the table below.
