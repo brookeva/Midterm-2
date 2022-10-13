@@ -1,0 +1,104 @@
+---
+title: "NC Property Values"
+author: "Brooke Acosta, Kate Tanabe"
+date: "2022-10-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Data
+
+This project used data from Macklenberg County to predict property values. Several variables used for this prediction were derived from the “student data set”. Variables derived from this data set included a property’s age, air conditioning type, building grade, heated area, sale year, and sale month. In addition, grocery store and capital improvement project spatial data were gathered from the Macklenberg County Open Data portal and included in the model. 
+
+### Table 1 - Summary Table
+
+```{r pressure, echo=FALSE}
+# Present table of summary statistics with variable descriptions. Sort these variables by their category (internal characteristics, amenities/public services or spatial structure). Check out the `stargazer` package for this. 
+```
+
+Once this data was gathered, our team was prepared to conduct some exploratory data analysis to identify the impact that our variables had on sales price. One example of this can be observed in Figure 1 below, which reflects the sales price of properties as a function of building area. Additional visualizations of the variables selected for prediction in this project will be presented in the methods and results section of this report. 
+
+### Figure 1 - Property Sales Prices as a Function of Building Area 
+
+```{r}
+
+```
+
+During the early stages of our exploratory data analysis, our team created four price correlation scatterplots to visualize the relationship between our variables and property sales price. These visualizations are presented in Figures 1 through 4 below and reflect the relationship between building grade, percent of heated area, property exposure to grocery stores, and property exposure to capital improvement projects. These scatterplots indicate a strong, positive, linear relationship between the selected variables and property sales price. Figure 5 below also visualizes the relationship between these variables and property sales price in a spatial format. Based on these findings, these variables were selected for future analysis in our OLS Regression Model discussed in the Methods section below.
+
+### Figure 2 - Building Grade Price Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 3 - Percent Heated Price Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 4 - Grocery Stores Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 5 - Capital Improvement Project Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 6 - Sales Price as a Function of Building Grade Map 
+
+```{r}
+
+```
+
+### Figure 7 - Sales Price as a Function of a Building's Percent Heated Area
+
+```{r}
+
+```
+
+### Figure 8 - Sales Price as a Function of Exposure to Grocery Stores
+
+```{r}
+
+```
+
+Our team also created a correlation matrix to visualize the correlation between our selected variables and property sales price. Correlation values closer to zero indicate a weaker relationship between variables, a value closer to positive 1 reflects a strong positive relationship between variables, and a value closer to negative 1 reflects a strong negative relationship between variables. For example, a strong positive relationship between building grade and sales price would indicate that as building grade increases, sales price increases as a result. In contrast, a strong negative relationship between the same variables would indicate that as building grade increases, sales price decreases. The price correlation matrix used to further quantify the effect that our selected variables had on property sales prices is reflected in Figure 9 below. 
+
+### Figure 9 - Price Correlation Matrix
+
+```{r}
+
+```
+
+## Methods
+
+Text
+
+## Results 
+
+## Discussion 
+
+Text 
+
+## Conclusion
+
+Text
