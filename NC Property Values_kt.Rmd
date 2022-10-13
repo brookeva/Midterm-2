@@ -1,0 +1,455 @@
+---
+title: "Predicting Housing Prices - Mecklenburg County, NC"
+author: "Brooke Acosta, Kate Tanabe"
+date: "2022-10-14"
+output: 
+  html_document: 
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 100)
+
+library(tidyverse)
+install.packages("tidycensus")
+library(tidycensus)
+library(dplyr)
+library(sf)
+library(spdep)
+library(caret)
+library(ckanr)
+library(FNN)
+library(grid)
+library(ggplot2)
+library(gridExtra)
+library(ggcorrplot) # plot correlation plot
+library(corrr)      # another way to plot correlation plot
+library(kableExtra)
+library(jtools)     # for regression model plots
+library(ggstance) # to support jtools plots
+library(ggpubr)    # plotting R^2 value on ggplot point scatter
+library(broom.mixed) # needed for effects plots
+
+# functions and data directory"
+
+NC_Data = st_read("https://raw.githubusercontent.com/mafichman/MUSA_508_Lab/main/Midterm/data/2022/studentData.geojson")
+head(NC_Data)
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+palette5 <- c("#ffffcc",
+"#c7e9b4",
+"#7fcdbb",
+"#41b6c4",
+"#2c7fb8",
+"#253494")
+
+ImprovProj <- 
+  st_read("Capital_Improvement_Projects_Points.geojson") %>%
+  st_transform('ESRI:102286')
+
+NPA <- 
+  st_read("Proximity to Early Care and Education.geojson") %>%
+  st_transform('ESRI:102286')
+
+NPA.sf <- 
+  NPA %>% 
+ st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+Groceries <- st_read("Grocery_Stores_(points).geojson")
+
+NCData.sf <- 
+  NC_Data %>% 
+ st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+ImproveProj.sf <- 
+  ImprovProj %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+Groceries.sf <- 
+  Groceries %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant") %>%
+  st_transform('ESRI:102286') %>%
+  distinct()
+
+```
+
+# Introduction
+
+
+# Data
+
+This project used data from Macklenberg County to predict property values. Several variables used for this prediction were derived from the “student data set”. Variables derived from this data set included a property’s age, air conditioning type, building grade, heated area, sale year, and sale month. In addition, grocery store and capital improvement project spatial data were gathered from the Macklenberg County Open Data portal and included in the model. 
+
+### Table 1 - Summary Table
+
+```{r pressure, echo=FALSE}
+# Present table of summary statistics with variable descriptions. Sort these variables by their category (internal characteristics, amenities/public services or spatial structure). Check out the `stargazer` package for this. 
+```
+
+Once this data was gathered, our team was prepared to conduct some exploratory data analysis to identify the impact that our variables had on sales price. One example of this can be observed in Figure 1 below, which reflects the sales price of properties as a function of building area. Additional visualizations of the variables selected for prediction in this project will be presented in the methods and results section of this report. 
+
+### Figure 1 - Property Sales Prices as a Function of Building Area 
+
+```{r}
+
+```
+
+During the early stages of our exploratory data analysis, our team created four price correlation scatterplots to visualize the relationship between our variables and property sales price. These visualizations are presented in Figures 1 through 4 below and reflect the relationship between building grade, percent of heated area, property exposure to grocery stores, and property exposure to capital improvement projects. These scatterplots indicate a strong, positive, linear relationship between the selected variables and property sales price. Figure 5 below also visualizes the relationship between these variables and property sales price in a spatial format. Based on these findings, these variables were selected for future analysis in our OLS Regression Model discussed in the Methods section below.
+
+### Figure 2 - Building Grade Price Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 3 - Percent Heated Price Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 4 - Grocery Stores Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 5 - Capital Improvement Project Correlation Scatterplot
+
+```{r}
+
+```
+
+### Figure 6 - Sales Price as a Function of Building Grade Map 
+
+```{r}
+
+```
+
+### Figure 7 - Sales Price as a Function of a Building's Percent Heated Area
+
+```{r}
+
+```
+
+### Figure 8 - Sales Price as a Function of Exposure to Grocery Stores
+
+```{r}
+
+```
+
+Our team also created a correlation matrix to visualize the correlation between our selected variables and property sales price. Correlation values closer to zero indicate a weaker relationship between variables, a value closer to positive 1 reflects a strong positive relationship between variables, and a value closer to negative 1 reflects a strong negative relationship between variables. For example, a strong positive relationship between building grade and sales price would indicate that as building grade increases, sales price increases as a result. In contrast, a strong negative relationship between the same variables would indicate that as building grade increases, sales price decreases. The price correlation matrix used to further quantify the effect that our selected variables had on property sales prices is reflected in Figure 9 below. 
+
+### Figure 9 - Price Correlation Matrix
+
+```{r}
+
+```
+
+# Methods
+
+Text
+
+# Results 
+## Summary 
+We used Ordinary Least Squares (OLS) to model housing price estimates in Mecklenburg County, NC. OLS finds the linear relationship between our dependent variable and predictors. In this situation, house price is the dependent variable, and our predictors are the variables and engineered features discussed above. We aimed to maximize the accuracy and generalizability of our predictions by using different predictors in our model. In order to do this, we split our modeling set into two additional sets: a training set which includes 60% of the observations and a test set which includes the remaining 40% of observations.  
+
+The table below provides a summary of our model, including our model’s r-squared and adjusted r-squared for the training sample. Our model explains about 67% of the variance in dependent variables.  
+
+### Table 2: OLS Summary Results
+```{r, warning = FALSE}
+#summary table for training set
+summary_table <- summary(reg1) 
+
+install.packages("stargazer")
+library(stargazer)
+
+stargazer(reg1, type="text", style="qje", digits=2, 
+          title = "Linear Regression Summary Results",
+          dep.var.labels = "Home Price",
+          covariate.labels = c("Bedrooms", "Full Bathrooms", "Half Bathrooms", "Percent Area Heated", "Basement", "AC" , "Total Acres", "Sold 2021", "Sold 2022", "Sold 2020", "1 Story", "1.5 Stories", "2 Stories", "2.5 Stories", "3.0 Stories", "Bi-Level", "Cape Cod Style", "Ranch Style", "Split Level", "Fireplaces", "Heat", "Grade: Fair", "Grade: Average", "Grade: Good", "Grade: Very Good", "Grade: Excellent", "Grade: Custom", "Age", "Cornelius", "Davidson", "Huntersville", "Matthews", "Mint Hill", "Pineville", "Stallings", "Unincorporated",  "Units", "Sold Feb", "Sold Mar", "Sold Apr", "Sold May", "Sold Jun", "Sold Jul", "Sold Aug", "Sold Sept", "Sold Oct", "Sold Nov", "Sold Dec", "Grocery Store Exposure", "Improvement Project Exposure"))
+```
+
+After running our model on the test set, we found that the mean absolute error (MAE) of our predictions was $117,252.50 and the mean absolute percentage error (MAPE) of our predictions was about 11.3%. These figures are presented in the table below.
+
+### Table 3: MAE and MAPE
+```{r, warning = FALSE}
+#Polished table of mean absolute error and MAPE
+Charlotte.testSum <- 
+  st_drop_geometry(Charlotte.test1) %>%
+  summarize(MAE = mean(price.AbsError, na.rm=TRUE),
+            MAPE = mean(price.APE, na.rm=TRUE))
+
+Charlotte.testSum %>%
+  rename("Mean Absolute Error" = MAE) %>%
+  rename("Mean Absolute Percentage Error" = MAPE)
+  kable(Charlotte.testSum, caption = "Test Set Results", align = "c") %>%
+    kable_styling(full_width = F)
+```
+
+## Cross-Validation
+It is possible our model is still inaccurate or misleading because we split our data into training and testing sets randomly. We conducted k-fold cross-validation tests in order to better understand the generalizability of our model. We ran a 100-fold cross-validation test, which split the dataset into equal sized subsets and measures for average goodness of fit across all folds. The summary of our cross-validation test, including mean, maximum, minimum, and standard deviation, is presented below.  
+
+### Table 4: Cross-Validation test results
+```{r, warning = FALSE}
+fitControl <- trainControl(method = "cv", number = 100)
+set.seed(825)
+
+reg.cv <- 
+  train(price ~ ., data = st_drop_geometry(Charlotte.test) %>% 
+                                dplyr::select(price, bedrooms,fullbaths, halfbaths, percentheated, basement, ac, totalac, year, storyheigh, numfirepla, heat,
+                                                grade, Age, municipali, units, month, grocery_nn1, proj_nn1), 
+     method = "lm", trControl = fitControl, na.action = na.pass)
+
+#cross val results 
+data.frame(Test = c("Cross_Validation"), 
+           Mean = mean(reg.cv$resample[,3]),
+           Max = max(reg.cv$resample[,3]),
+           Min = min(reg.cv$resample[,3]),
+           Standard_Deviation = sd(reg.cv$resample[,3]))%>%
+  kable() %>%
+  kable_styling() %>%
+  footnote(general_title = "Summary Statistics of Cross Validation, k = 100 folds")
+```
+
+Our model was somewhat generalizable. The standard deviation of the MAE across all folds was $29,517.20. This figure shows the goodness of fit metrics across all folds and means there is still some, but not a large amount of, variation across the folds. The distribution of MAE is partially clustered tightly together between $100,000 and $150,000, but it is also positively skewed by a small number of higher values. This could be due to outliers in our dataset. We also provide a plot of the distribution of MAE across all 100 folds below.  
+
+### Figure 10: Distribution of MAE
+```{r, warning = FALSE, message = FALSE}
+hist(reg.cv$resample[,3],xlab="MAE", col="#2c7fb8", breaks = 50, main = "Distribution of Mean Absolute Error")
+```
+
+## Accuracy
+The plot below shows the linear models for the predicted and actual sale price of our dataset. The black line represents our model’s prediction and the green line represents a perfect fit. We can see that there is a small amount of error in our model.  
+
+### Figure 11: Prediction vs observed price
+```{r, warning = FALSE, message = FALSE}
+ggplot(data = Charlotte.test1, aes(x=price.Predict,y=price))+
+  geom_point(colour = "#2c7fb8", size = 3, alpha =0.75)+
+  geom_abline(intercept = 0, slope = 1, size = 3,color = "#7fcdbb")+
+  geom_smooth(method = lm, se=F,colour = "black",size=2)+
+  labs(title="Prediction as a function of observed price",
+       subtitle="Black line represents model prediction; Green line represents perfect prediction",
+       x="Predicted Price ($)",
+       y="Observed Price ($)") +
+  plotTheme()+
+  theme(plot.title = element_text(size=22),
+        legend.title = element_text(),
+        legend.position="right",
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=12))
+```
+
+## Generalizability
+Generalizability across space is also important for creating house price prediction models. Looking at the map of our test set residuals, we can see that there is some clustering, or spatial autocorrelation, of higher residuals in certain areas.  
+
+### Figure 12: Residuals 
+```{r, warning = FALSE, message = FALSE}
+coords <- st_coordinates(NCData.sf) 
+
+neighborList <- knn2nb(knearneigh(coords, 5))
+
+spatialWeights <- nb2listw(neighborList, style="W")
+
+NCData.sf$lagPrice <- lag.listw(spatialWeights, NCData.sf$price)
+
+coords.test <-  st_coordinates(Charlotte.test2) 
+
+neighborList.test <- knn2nb(knearneigh(coords.test, 5))
+
+spatialWeights.test <- nb2listw(neighborList.test, style="W")
+
+Charlotte.test2$lagPrice <- lag.listw(spatialWeights.test, Charlotte.test2$price)
+
+ggplot() +
+    geom_sf(data = NPA.sf, fill = "white") +
+    geom_sf(data = Charlotte.test2, aes(colour = q5(price.AbsError)),
+            show.legend = "point", size = 1) +
+    scale_colour_manual(values = palette5,
+                     labels=qBr(Charlotte.test2,"price.AbsError"),
+                     name="Quintile\nBreaks ($)") +
+    labs(title="Test Set Residuals", 
+         subtitle="Mecklenburg County") +
+    mapTheme()
+```
+
+The plots below show the spatial autocorrelation of home prices with other nearby home prices. We calculated the average sale price for each home’s five nearest neighbors. We see that as the price of a given home increases, the price of its neighbors increases significantly as well. We also see that as home price increases, the spatial lag of errors also increases but not at the same rate as the first test. This spatial lag of prices and errors are presented in the two plots below.  
+
+### Figures 13 and 14: Spatial Lag Plots
+```{r, warning = FALSE, message = FALSE}
+#Charlotte.test1 <- st_drop_geometry(Charlotte.test)
+Charlotte.test2 <- Charlotte.test2 %>%
+  mutate(Regression = "Baseline Regression",
+         price.Predict = predict(reg1, Charlotte.test2),
+         price.Error = price.Predict - price,
+         price.AbsError = abs(price.Predict - price),
+         price.APE = (abs(price.Predict - price)) / price.Predict)%>%
+  filter(price < 5000000) 
+
+ggplot(Charlotte.test2, aes(x=lagPrice, y=price)) +
+  geom_point(colour = "#2c7fb8", size = 3, alpha =0.75) +
+  geom_smooth(method = "lm", se = FALSE, colour = "black") +
+  labs(title = "Price as a function of the spatial lag of price",
+       x = "Spatial lag of price (Mean price of 5 nearest neighbors)",
+       y = "Sale Price") +
+  plotTheme()
+```
+
+```{r, warning = FALSE, message = FALSE}
+Charlotte.test2$lagPriceError <- lag.listw(spatialWeights.test, Charlotte.test2$price.AbsError, NAOK=TRUE)
+
+ggplot(Charlotte.test2, aes(x=lagPriceError, y=price)) +
+  geom_point(colour = "#2c7fb8", size = 3, alpha =0.75) +
+  geom_smooth(method = "lm", se = FALSE, colour = "black") +
+  labs(title = "Error as a function of the spatial lag of price",
+       x = "Spatial lag of errors (Mean error of 5 nearest neighbors)",
+       y = "Sale Price") +
+  plotTheme()
+```
+
+Finally, we used Moran’s I to better understand if spatial autocorrelation is present in our model. Our model’s Moran’s I is positive and around 0.25, which means that there is some amount of spatial autocorrelation in our model. We present the outcome of the Moran’s I test below.  
+
+### Figure 15: Moran's I
+```{r, warning = FALSE, message = FALSE}
+#morans
+moranTest <- moran.mc(Charlotte.test2$price.Error, na.action=na.omit, 
+                      spatialWeights.test, nsim = 999)
+
+ggplot(as.data.frame(moranTest$res[c(1:999)]), aes(moranTest$res[c(1:999)])) +
+  geom_histogram(binwidth = 0.01) +
+  geom_vline(aes(xintercept = moranTest$statistic), colour = "#2c7fb8",size=1) +
+  scale_x_continuous(limits = c(-1, 1)) +
+  labs(title="Observed and permuted Moran's I",
+       subtitle= "Observed Moran's I in blue",
+       x="Moran's I",
+       y="Count") +
+  plotTheme()
+```
+
+We plot our predicted values below. Here we can clearly see clustering of predicted home prices with more expensive predictions clustered around the south central and northern parts of the county. We also see clustering of less expensive price predictions in an arch around downtown Charlotte. 
+
+### Figure 15: Predicted Prices
+```{r, warning = FALSE, message = FALSE}
+ggplot() +
+  geom_sf(data = NPA.sf, fill = "white") +
+  geom_sf(data = Charlotte.test2, aes(colour = q5(price.Predict)), 
+          show.legend = "point", size = 1) +
+  scale_colour_manual(values=palette5,
+                      labels=qBr(Charlotte.test2,"price.Predict"),
+                      name="Quintile\nBreaks") +
+  labs(title="Predicted Sale Price", subtitle = "Mecklenburg County") +
+  mapTheme()+ 
+  theme(plot.title = element_text(size=22))
+```
+
+We plot the MAPE of our predictions by neighborhood below. We still see some clustering of errors around Charlotte and near the outskirts of the county.  
+
+### Figure 16: MAPE by neighborhood
+```{r, warning = FALSE, message = FALSE}
+install.packages("mapview")
+library(mapview)
+
+charlotte.test_sf = st_as_sf(Charlotte.test2)
+nhoods = st_intersection(NPA.sf, charlotte.test_sf)
+nhoods_MAPE <- nhoods %>%
+  group_by(id) %>%
+  summarise(meanMAPE = mean(price.APE, na.rm=TRUE)*100, 
+            meanPrice = mean(price))
+
+
+ggplot() +
+  geom_sf(data = NPA.sf %>%
+            left_join(st_drop_geometry(nhoods_MAPE), by = "id"),
+          aes(fill = q5(meanMAPE))) +
+  #geom_sf(data = Charlotte.test2, colour = "black", size = .25) +
+  scale_fill_manual(values = palette5,
+                    labels=qBr(nhoods_MAPE,"meanMAPE"),
+                    name="Quintile\nBreaks") +
+  mapTheme() +
+  labs(title="Absolute sale price percent errors by Neighborhood")
+```
+
+Additionally, we present a scatterplot of MAPE by neighborhood as function of mean price by neighborhood below. We see that as mean price by neighborhood increases, MAPE of neighborhood also increases. This plot also allows us to see an outlier in our dataset.  
+
+### Figure 17: Scatterplot of MAPE by neighborhood
+```{r, warning = FALSE, message = FALSE}
+ggplot(nhoods_MAPE, aes(x=meanPrice, y=meanMAPE))+
+  geom_point(colour = "#2c7fb8", size = 3, alpha =0.75) +
+  geom_smooth(method = "lm", color = "black") +
+  labs(title = "MAPE by neighborhood as a function of price by neighborhood",
+       x = "Sale Price",
+       y = "MAPE",
+       subtitle = "Figure 5.3") +
+  theme(
+    legend.position = "none") +
+  plotTheme()
+```
+
+Finally, we split out study area into two groups. In this case, we split the county by race and then by income to test how well our model generalizes in different contexts. We present the race and income splits by neighborhood below. These plots show the segregation of race and income in Mecklenburg County. 
+
+### Figure 18: Race and Income Context 
+```{r, warning = FALSE, message = FALSE}
+NCtracts <- 
+  get_acs(geography = "tract", variables = c("B01001_001E","B01001A_001E","B06011_001"), 
+          year = 2017, state=37, county= 119, geometry=T, output = "wide") %>%
+  st_transform('ESRI:102286')  %>%
+  rename(TotalPop = B01001_001E,
+         NumberWhites = B01001A_001E,
+         Median_Income = B06011_001E) %>%
+  mutate(percentWhite = NumberWhites / TotalPop,
+         raceContext = ifelse(percentWhite > .5, "Majority White", "Majority Non-White"),
+         incomeContext = ifelse(Median_Income > 32322, "High Income", "Low Income"))
+
+grid.arrange(ncol = 2,
+  ggplot() + geom_sf(data = na.omit(NCtracts), aes(fill = raceContext)) +
+    scale_fill_manual(values = c("#7fcdbb", "#2c7fb8"), name="Race Context") +
+    labs(title = "Race Context") +
+    mapTheme() + theme(legend.position="bottom"), 
+  ggplot() + geom_sf(data = na.omit(NCtracts), aes(fill = incomeContext)) +
+    scale_fill_manual(values = c("#7fcdbb", "#2c7fb8"), name="Income Context") +
+    labs(title = "Income Context") +
+    mapTheme() + theme(legend.position="bottom"))
+```
+
+In the race context, our model predicts across race relatively similarly but the error rates in majority white neighborhoods is higher than that in majority non-white neighborhoods. 
+
+###  Race Context 
+```{r, warning = FALSE, message = FALSE}
+st_join(Charlotte.test2, NCtracts) %>% 
+  group_by(raceContext) %>%
+  summarize(mean.MAPE = scales::percent(mean(price.APE, na.rm = T))) %>%
+  st_drop_geometry() %>%
+  spread(raceContext, mean.MAPE) %>%
+  kable(caption = "Test set MAPE by neighborhood race context")%>%
+  kable_styling() 
+```
+
+In terms of income, our model also produced higher errors in neighborhoods with higher median incomes than neighborhoods with lower median incomes.  
+
+### Income Context
+```{r, warning = FALSE, message = FALSE}
+st_join(Charlotte.test2, NCtracts) %>% 
+  group_by(incomeContext) %>%
+  summarize(mean.MAPE = scales::percent(mean(price.APE, na.rm = T))) %>%
+  st_drop_geometry() %>%
+  spread(incomeContext, mean.MAPE) %>%
+  kable(caption = "Test set MAPE by neighborhood income context") %>%
+  kable_styling() 
+```
+While MAPEs in both the race or income contexts are not significantly different, it does show that our model is somewhat generalizable but it overfits house price predictions in neighborhoods that are majority white and higher incomes.  
+
+# Discussion 
+
+Overall, our model is relatively effective at predicting house prices in Mecklenburg County. We found that the percentage of heated area in the house, as well as exposure to grocery stores and capital improvement projects, to be interesting and important variables in our model. Our model predicted about 67% of variation in home prices. The MAE of our predictions was $117,252.50, while the MAPE of our predictions was about 11.3%. We were able to account for some spatial variation in our prices, but not fully.  
+
+We found that our model was less accurate when predicting home prices for more expensive properties. Our model was also less accurate for homes located in majority white neighborhoods. This could be due to the breakdown of home prices in our training set and fewer observations with higher prices, which would lead to less accurate predictions. However, our model was more accurate when predicting less expensive homes.  
+
+# Conclusion
+
+Text
