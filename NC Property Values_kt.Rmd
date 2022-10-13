@@ -310,16 +310,17 @@ Our team also created a correlation matrix to visualize the correlation between 
 ### Figure 9 - Price Correlation Matrix
 
 ```{r}
-numericVars <- 
-  select_if(NC_data, is.numeric) %>% na.omit()
+numericVars1 <- 
+  select_if(st_drop_geometry(NCData.sf), is.numeric) %>% 
+  na.omit() %>%
+  dplyr::select(price, bedrooms,fullbaths, halfbaths, percentheated, basement, ac, totalac, year, storyheigh, numfirepla, heat,  grade, Age, municipali, units, month, grocery_nn1, proj_nn1)
 
 ggcorrplot(
-  round(cor(numericVars), 1), 
-  p.mat = cor_pmat(numericVars),
+  round(cor(numericVars1), 1), 
+  p.mat = cor_pmat(numericVars1),
   colors = c("#25CB10", "white", "#FA7800"),
-  type = "lower",
-  insig = "blank") +  
-    labs(title = "Correlation across numeric variables")
+  type="lower",
+  insig = "blank") +    labs(title = "Correlation across Variables") 
     
 ```
 
