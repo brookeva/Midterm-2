@@ -83,7 +83,11 @@ Groceries.sf <-
 
 # Introduction
 
-Text 
+This project explores the effect that various independent variables have on the sales price of a property. More specifically, this project uses a linear regression model in an attempt to predict the exact price of properties in Mecklenburg County, North Carolina based on a property’s relationship to the variables selected by our team.  
+
+This exercise is difficult because in order to make an accurate prediction, our team had to determine which variables were most likely to have the greatest impact on a property’s value. This step required exploratory data analysis for several variables before identifying which ones would be the most effective in the model. Once this decision was made, our team proceeded to engineer several features, so it fit the needs of our model. This prepared the data for future steps including assessing the correlation between our variables and sales price and a K Nearest Neighbor (KNN) analysis to identify a property’s exposure to several variables. Lastly, our modeling strategy included model estimation and validation phase to determine the model’s generalizability. 
+
+Following our Ordinary Least Squares (OLS) regression, we found that our model predicted about 67% of variation in home prices. Following a k-fold cross-validation test, our team determined that our model was somewhat generalizable, as there was only moderate variation across folds. This infers that our model could be applied to other data sets in the future. 
 
 # Data
 
@@ -140,7 +144,7 @@ stargazer(IntrinsicFeatures,
 
 ```
 
-Once this data was gathered, our team was prepared to conduct some exploratory data analysis to identify the impact that our variables had on sales price. One example of this can be observed in Figure 1 below, which reflects the sales price of properties as a function of building area. Additional visualizations of the variables selected for prediction in this project will be presented in the methods and results section of this report. 
+Once this data was gathered, our team was prepared to conduct some exploratory data analysis to identify the impact that our variables had on sales price. One example of this can be observed in Figure 1 below, which reflects the sales price of properties as a function of building area. Additional visualizations of the variables selected for prediction in this project will be presented in the methods and results sections of this report. 
 
 ### Figure 1 - Property Sales Prices as a Function of Building Area Map
 
@@ -325,7 +329,14 @@ ggcorrplot(
 
 # Methods
 
-Text
+Our team began our model building process by researching Mecklenburg County to gain a gain a sense of local expertise. This knowledge was used to identify what variables would be most effective at predicting property values in the county. We then proceeded to find the required data sources and wrangle them into our workspace. Our team worked to further, “clean the data” to ensure that the required fields were present and to remove any features that were not useful for our efforts. 
+
+With the data wrangled and cleaned, the team was then ready to explore the data sets. We began our exploratory data analysis by creating maps to reflect our variables in a spatial format. Then, we created correlation scatterplots to understand the potential relationship between our variables and property sales price. Using the scatterplots, we were able to select variables for further analysis based on the strength and direction of their relationship to sales prices. More specifically, we selected variables that had a strong, positive relationship to sales price. This type of relationship would indicate that as the magnitude of a variable increased, sales price would increase as a direct result. The variables selected using this methodology included age, air conditioning type, building grade, heated area, sale year, sale month, exposure to grocery stores, and exposure to capital projects. This process is referred to as data mining. 
+
+Once our exploratory data analysis was completed, our team conducted further feature engineering. Feature engineering was conducted to convert our raw variables into useful predictive features. Another major component of feature engineering is measuring exposure. A K-Nearest Neighbor (KNN) Analysis was conducted as part of this and was done for two of our variables including grocery stores and capital improvement projects. The analysis measures the “exposure”, or distance, between properties and grocery stores and capital improvements projects. A higher exposure score would indicate that properties are in close proximity to grocery stores and capital improvement projects.
+
+Lastly, our team began the model estimation and validation step. This step was used to determine the generalizability of our model and the effect that our feature engineering had on predicting sales prices within the county. Strong generalizability indicates that a model will be useful in predicting the values of new data that is applied to it. We accomplished this by conducting Mean Absolute Error (MAE), Mean Absolute Percentage Error (MAPE), k-fold cross-validation, and Moran’s I tests. The MAE and MAPE tests determined potential errors resulting from our model, while the k-fold cross-validation test measured the generalizability of our model, and the Moran’s I test measured the spatial autocorrelation of our values. Lastly, to further test our model’s generalizability, our team applied census data to our model to test how well our model generalizes in different contexts. 
+
 
 # Results 
 ## Summary 

@@ -361,6 +361,10 @@ Note: the use of the `ggscatter()` function from the `ggpubr` package to plot th
 **Let's take a few minutes to interpret this**
 
 ```{r correlation_matrix}
+
+boston_sub_200k <- st_drop_geometry(boston.sf) %>% 
+filter(SalePrice <= 2000000) 
+
 numericVars <- 
   select_if(nc_sub_200k, is.numeric) %>% na.omit()
 
